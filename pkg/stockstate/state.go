@@ -101,6 +101,10 @@ func (state *State) Update() {
 }
 
 // Sync flushes the state to etcd
-func (state *State) Sync() {
+func (state *State) Sync() error {
+	panic("implement me")
+}
+
+func (state *State) Close() error {
 	panic("implement me")
 }
