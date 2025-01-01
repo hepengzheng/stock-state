@@ -1,0 +1,8 @@
+# for vscode
+.vscode
+
+# for jetbrains IDEs
+.idea
+
+# for macOS
+.DS_Store
