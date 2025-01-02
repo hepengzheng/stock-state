@@ -47,7 +47,7 @@ func (ls *Leadership) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("Leadership exits because %s", ctx.Err())
+			return fmt.Errorf("leadership exits because %v", ctx.Err())
 		default:
 			// the following line will block until the current server becomes the leader
 			err = ls.election.Campaign(ctx, ls.leaderID)
