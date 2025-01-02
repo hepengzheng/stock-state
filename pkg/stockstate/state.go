@@ -3,108 +3,151 @@ package stockstate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/hepengzheng/stock-state/pkg/logutil"
+	"github.com/hepengzheng/stock-state/pkg/election"
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
 
-const defaultFirstAlloc = 500
+const (
+	defaultAllocCount = 500
+
+	capValueKey = "cap"
+)
 
 var (
-	ErrNotInitilized = errors.New("state is not initilized")
+	ErrNotInitialized = errors.New("state is not initialized")
+	ErrNotLeader      = errors.New("server is not the leader")
+	ErrCapReached     = errors.New("cap reached")
+	ErrRetryExceeded  = errors.New("retry exceeded")
 )
 
 type State struct {
 	sync.Mutex
-	storage        storage.StockStorage
-	key            string
-	value          atomic.Int32
-	lastSavedValue atomic.Int32
-	initilized     atomic.Bool
+	storage storage.StockStorage
 
-	ctx context.Context
+	ctx            context.Context
+	prefix         string
+	updateInterval time.Duration
+
+	value    atomic.Int32
+	capValue atomic.Int32
+
+	initialized atomic.Bool
 }
 
-func NewState(ctx context.Context, storage storage.StockStorage, key string) *State {
+func NewState(ctx context.Context, storage storage.StockStorage, updateInterval time.Duration, key string) *State {
 	return &State{
-		storage: storage,
-		key:     key,
-		ctx:     ctx,
+		storage:        storage,
+		prefix:         key,
+		updateInterval: updateInterval,
+		ctx:            ctx,
 	}
 }
 
-func (state *State) Init(ctx context.Context) error {
-	state.Lock()
-	defer state.Unlock()
+func (s *State) Init(ctx context.Context) error {
+	s.Lock()
+	defer s.Unlock()
 
-	if state.initilized.Load() {
+	if s.initialized.Load() {
 		return nil
 	}
 
-	value, err := state.storage.Load(ctx, state.key)
+	// recover from etcd
+	capKey := s.getCapKey()
+	currentCapValue, err := s.storage.Load(ctx, capKey)
 	if err != nil {
 		return err
 	}
-	newValue := value + defaultFirstAlloc
-	err = state.storage.Save(ctx, state.key, newValue)
+	newCapValue := currentCapValue + defaultAllocCount
+	err = s.storage.Save(ctx, capKey, newCapValue)
 	if err != nil {
 		return err
 	}
-	state.value.Store(value)
-	state.lastSavedValue.Store(value)
-	state.initilized.Store(true)
+	s.value.Store(currentCapValue)
+	s.capValue.Store(newCapValue)
+
+	s.initialized.Store(true)
 	return nil
 }
 
-func (state *State) Get(ctx context.Context, count int32) (int32, error) {
-	state.Lock()
-	defer state.Unlock()
+func (s *State) Emit(_ context.Context, leadership *election.Leadership, count int32) (int32, error) {
+	const retryLimit = 10
+	for range retryLimit {
+		if !s.initialized.Load() {
+			if leadership.IsLeader() {
+				<-time.After(10 * time.Second)
+				continue
+			}
+			return 0, ErrNotLeader
+		}
 
-	if !state.initilized.Load() {
-		return 0, ErrNotInitilized
+		res, err := s.emit(count)
+		if err != nil {
+			if errors.Is(err, ErrCapReached) {
+				<-time.After(s.updateInterval)
+				continue
+			}
+			return 0, err
+		}
+
+		if !leadership.IsLeader() {
+			return 0, ErrNotLeader
+		}
+		return res, nil
+	}
+	return 0, ErrRetryExceeded
+}
+
+func (s *State) Update() error {
+	if !s.initialized.Load() {
+		return ErrNotInitialized
 	}
 
-	value := state.value.Load()
-	lastSaved := state.lastSavedValue.Load()
-	if lastSaved-value > count {
-		state.value.Add(count)
+	capKey := s.getCapKey()
+	capValue, err := s.storage.Load(s.ctx, capKey)
+	if err != nil {
+		return err
+	}
+
+	lag := capValue - s.value.Load()
+	// still serve with the memory counter
+	if lag > defaultAllocCount/3 {
+		return nil
+	}
+
+	// renew the cap
+	newCapValue := capValue + defaultAllocCount
+	err = s.storage.Save(s.ctx, capKey, newCapValue)
+	if err != nil {
+		return err
+	}
+	s.capValue.Store(newCapValue)
+	return nil
+}
+
+func (s *State) Close() error {
+	s.Lock()
+	defer s.Unlock()
+	s.initialized.Store(false)
+	return nil
+}
+
+func (s *State) emit(count int32) (int32, error) {
+	s.Lock()
+	defer s.Unlock()
+	value := s.value.Load()
+	capValue := s.capValue.Load()
+	if capValue-value > count {
+		s.value.Add(count)
 		return value, nil
 	}
-
-	newValue := value + count + defaultFirstAlloc
-	err := state.storage.Save(ctx, state.key, newValue)
-	if err != nil {
-		return 0, err
-	}
-
-	state.value.Add(count)
-	state.lastSavedValue.Store(newValue)
-	return value + count, nil
+	return 0, ErrCapReached
 }
 
-func (state *State) Update() {
-	defer logutil.LogPanic()
-
-	ticker := time.NewTicker(30 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-state.ctx.Done():
-			return
-		case <-ticker.C:
-			// TODO: renew the value
-		}
-	}
-}
-
-// Sync flushes the state to etcd
-func (state *State) Sync() error {
-	panic("implement me")
-}
-
-func (state *State) Close() error {
-	panic("implement me")
+func (s *State) getCapKey() string {
+	return fmt.Sprintf("%s:%s:%d", s.prefix, capValueKey, s.capValue.Load())
 }
