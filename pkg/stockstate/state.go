@@ -39,15 +39,6 @@ type State struct {
 	initialized atomic.Bool
 }
 
-func NewState(ctx context.Context, storage storage.StockStorage, updateInterval time.Duration, key string) *State {
-	return &State{
-		storage:        storage,
-		prefix:         key,
-		updateInterval: updateInterval,
-		ctx:            ctx,
-	}
-}
-
 func (s *State) Init(ctx context.Context) error {
 	s.Lock()
 	defer s.Unlock()
@@ -74,9 +65,17 @@ func (s *State) Init(ctx context.Context) error {
 	return nil
 }
 
-func (s *State) Emit(_ context.Context, leadership *election.Leadership, count int32) (int32, error) {
+func (s *State) Emit(ctx context.Context, leadership *election.Leadership, count int32) (int32, error) {
 	const retryLimit = 10
 	for range retryLimit {
+		select {
+		case <-s.ctx.Done():
+			return 0, s.ctx.Err()
+		case <-ctx.Done():
+			return 0, s.ctx.Err()
+		default:
+		}
+
 		if !s.initialized.Load() {
 			if leadership.IsLeader() {
 				<-time.After(10 * time.Second)
@@ -129,7 +128,11 @@ func (s *State) Update() error {
 	return nil
 }
 
-func (s *State) Close() error {
+func (s *State) Delete(ctx context.Context) error {
+	return s.storage.Delete(ctx, s.prefix)
+}
+
+func (s *State) close() error {
 	s.Lock()
 	defer s.Unlock()
 	s.initialized.Store(false)
