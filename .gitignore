@@ -6,3 +6,5 @@
 
 # for macOS
 .DS_Store
+
+*.log
