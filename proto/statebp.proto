@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package statepb;
+
+option go_package = "github.com/hepengzheng/stock-state/api/statebp;statepb";
+
+service State {
+  rpc GetStock(stream Request) returns (stream Response) {}
+}
+
+message Request {
+  int64 timestamp = 1;
+  string request_id = 2;
+  string key = 3;
+  int32 count = 4;
+}
+
+message Response {
+  enum Error {
+    OK = 0;
+    INVALID_REQUEST = 1;
+    SERVER_NOT_INITIALIZED = 2;
+    SERVER_RETRY_LIMIT_EXCEEDED = 3;
+    UNKNOWN = 100;
+  }
+
+  int64 timestamp = 1;
+  string request_id = 2;
+  Error error = 3;
+  int32 result = 4;
+}
