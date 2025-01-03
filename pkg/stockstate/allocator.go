@@ -9,11 +9,11 @@ import (
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
 
-type ManagerConfig struct {
+type AllocatorConfig struct {
 	UpdateInterval time.Duration
 }
 
-type Manger struct {
+type Allocator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -23,13 +23,13 @@ type Manger struct {
 	state      *State
 }
 
-func NewManger(ctx context.Context,
+func NewAllocator(ctx context.Context,
 	leadership *election.Leadership,
 	storage storage.StockStorage,
 	prefix string,
-	config *ManagerConfig,
-) *Manger {
-	m := Manger{leadership: leadership}
+	config *AllocatorConfig,
+) *Allocator {
+	m := Allocator{leadership: leadership}
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.state = &State{
 		storage:        storage,
@@ -40,43 +40,43 @@ func NewManger(ctx context.Context,
 	return &m
 }
 
-func (m *Manger) Init() error {
-	err := m.state.Init(m.ctx)
+func (at *Allocator) Init() error {
+	err := at.state.Init(at.ctx)
 	if err != nil {
 		return err
 	}
 
-	go m.UpdateLoop()
+	go at.UpdateLoop()
 	return nil
 }
 
-func (m *Manger) Close() {
-	m.cancel()
-	_ = m.state.close()
+func (at *Allocator) Close() {
+	at.cancel()
+	_ = at.state.close()
 }
 
-func (m *Manger) Emit(ctx context.Context, count int32) (int32, error) {
-	res, err := m.state.Emit(ctx, m.leadership, count)
+func (at *Allocator) Emit(ctx context.Context, count int32) (int32, error) {
+	res, err := at.state.Emit(ctx, at.leadership, count)
 	if err != nil {
 		return 0, err
 	}
 	return res, nil
 }
 
-func (m *Manger) Delete(ctx context.Context) error {
-	return m.state.Delete(ctx)
+func (at *Allocator) Delete(ctx context.Context) error {
+	return at.state.Delete(ctx)
 }
 
-func (m *Manger) UpdateLoop() {
+func (at *Allocator) UpdateLoop() {
 	defer logutil.LogPanic()
-	ticker := time.NewTicker(m.state.updateInterval)
+	ticker := time.NewTicker(at.state.updateInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-at.ctx.Done():
 			return
 		case <-ticker.C:
-			if err := m.state.Update(); err != nil {
+			if err := at.state.Update(); err != nil {
 			}
 		}
 	}

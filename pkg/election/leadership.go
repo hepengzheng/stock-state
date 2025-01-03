@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 
 	"github.com/hepengzheng/stock-state/pkg/logutil"
 )
+
+var ProviderSet = wire.NewSet(NewLeadership)
 
 const defaultSessionTTL = 5 // seconds
 

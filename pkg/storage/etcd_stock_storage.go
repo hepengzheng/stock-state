@@ -3,8 +3,11 @@ package storage
 import (
 	"context"
 
+	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
+
+var ProviderSet = wire.NewSet(NewEtcdStockStorage)
 
 type EtcdStockStorage struct {
 	client *clientv3.Client
