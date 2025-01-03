@@ -74,6 +74,10 @@ func (ls *Leadership) Stop(ctx context.Context) {
 	}
 }
 
+func (ls *Leadership) GetLeaderID() string {
+	return ls.currentLeaderID.Load().(string)
+}
+
 func (ls *Leadership) IsLeader() bool {
 	if ls == nil {
 		return false
