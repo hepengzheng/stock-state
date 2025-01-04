@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 
 	"github.com/google/wire"
 	"go.uber.org/zap"
@@ -21,6 +22,8 @@ type StockServer struct {
 
 	ctx context.Context
 	am  *stockstate.AllocatorManager
+
+	clientConns sync.Map // server key -> client stream
 }
 
 func NewServer(ctx context.Context, am *stockstate.AllocatorManager) *StockServer {
