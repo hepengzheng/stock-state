@@ -1,10 +1,12 @@
 package jsonutil
 
 import (
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
 func MustMarshal(v proto.Message) string {
-	bs, _ := proto.Marshal(v)
+	marshaller := protojson.MarshalOptions{EmitDefaultValues: true}
+	bs, _ := marshaller.Marshal(v)
 	return string(bs)
 }

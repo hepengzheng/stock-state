@@ -26,7 +26,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StateClient interface {
-	GetStock(ctx context.Context, opts ...grpc.CallOption) (State_GetStockClient, error)
+	GetStock(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 }
 
 type stateClient struct {
@@ -37,42 +37,20 @@ func NewStateClient(cc grpc.ClientConnInterface) StateClient {
 	return &stateClient{cc}
 }
 
-func (c *stateClient) GetStock(ctx context.Context, opts ...grpc.CallOption) (State_GetStockClient, error) {
-	stream, err := c.cc.NewStream(ctx, &State_ServiceDesc.Streams[0], State_GetStock_FullMethodName, opts...)
+func (c *stateClient) GetStock(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, State_GetStock_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &stateGetStockClient{stream}
-	return x, nil
-}
-
-type State_GetStockClient interface {
-	Send(*Request) error
-	Recv() (*Response, error)
-	grpc.ClientStream
-}
-
-type stateGetStockClient struct {
-	grpc.ClientStream
-}
-
-func (x *stateGetStockClient) Send(m *Request) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *stateGetStockClient) Recv() (*Response, error) {
-	m := new(Response)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+	return out, nil
 }
 
 // StateServer is the server API for State service.
 // All implementations must embed UnimplementedStateServer
 // for forward compatibility
 type StateServer interface {
-	GetStock(State_GetStockServer) error
+	GetStock(context.Context, *Request) (*Response, error)
 	mustEmbedUnimplementedStateServer()
 }
 
@@ -80,8 +58,8 @@ type StateServer interface {
 type UnimplementedStateServer struct {
 }
 
-func (UnimplementedStateServer) GetStock(State_GetStockServer) error {
-	return status.Errorf(codes.Unimplemented, "method GetStock not implemented")
+func (UnimplementedStateServer) GetStock(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetStock not implemented")
 }
 func (UnimplementedStateServer) mustEmbedUnimplementedStateServer() {}
 
@@ -96,30 +74,22 @@ func RegisterStateServer(s grpc.ServiceRegistrar, srv StateServer) {
 	s.RegisterService(&State_ServiceDesc, srv)
 }
 
-func _State_GetStock_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(StateServer).GetStock(&stateGetStockServer{stream})
-}
-
-type State_GetStockServer interface {
-	Send(*Response) error
-	Recv() (*Request, error)
-	grpc.ServerStream
-}
-
-type stateGetStockServer struct {
-	grpc.ServerStream
-}
-
-func (x *stateGetStockServer) Send(m *Response) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *stateGetStockServer) Recv() (*Request, error) {
-	m := new(Request)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _State_GetStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(StateServer).GetStock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: State_GetStock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StateServer).GetStock(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 // State_ServiceDesc is the grpc.ServiceDesc for State service.
@@ -128,14 +98,12 @@ func (x *stateGetStockServer) Recv() (*Request, error) {
 var State_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "statepb.State",
 	HandlerType: (*StateServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "GetStock",
-			Handler:       _State_GetStock_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
+			MethodName: "GetStock",
+			Handler:    _State_GetStock_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "statebp.proto",
 }
