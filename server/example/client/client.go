@@ -16,8 +16,7 @@ import (
 func main() {
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
-		logger.Error("Failed to connect", zap.Error(err))
-		return
+		logger.Fatal("Failed to connect", zap.Error(err))
 	}
 	defer conn.Close()
 

@@ -30,14 +30,13 @@ func (ms *MockServer) GetStock(ctx context.Context, req *statepb.Request) (*stat
 func main() {
 	listener, err := net.Listen("tcp", ":50051")
 	if err != nil {
-		logger.Error("failed to listen", zap.Error(err))
-		return
+		logger.Fatal("failed to listen", zap.Error(err))
 	}
 	grpcServer := grpc.NewServer()
 	statepb.RegisterStateServer(grpcServer, &MockServer{})
 
 	logger.Info("gRPC server is running on port 50051...")
 	if err = grpcServer.Serve(listener); err != nil {
-		logger.Error("failed to serve", zap.Error(err))
+		logger.Fatal("failed to serve", zap.Error(err))
 	}
 }
