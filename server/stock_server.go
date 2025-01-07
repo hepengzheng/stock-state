@@ -23,26 +23,24 @@ type StockServer struct {
 	ctx context.Context
 	am  *stockstate.AllocatorManager
 
-	leadership  *election.Leadership
 	clientConns sync.Map // server key -> client stream
 }
 
-func NewServer(ctx context.Context,
-	leadership *election.Leadership,
-	am *stockstate.AllocatorManager,
-) *StockServer {
+func NewServer(ctx context.Context, am *stockstate.AllocatorManager) *StockServer {
 	return &StockServer{
-		ctx:        ctx,
-		am:         am,
-		leadership: leadership,
+		ctx: ctx,
+		am:  am,
 	}
 }
 
 func (s *StockServer) GetStock(ctx context.Context, req *statepb.Request) (*statepb.Response, error) {
-	if !s.leadership.IsLeader() {
-		return s.forwardRequestToLeader(ctx, func(ctx context.Context, client statepb.StateClient) (*statepb.Response, error) {
-			return client.GetStock(ctx, req)
-		})
+	leadership := s.am.GetLeadership(req.Key)
+	if !leadership.IsLeader() {
+		return s.forwardRequestToLeader(ctx, leadership,
+			func(ctx context.Context, client statepb.StateClient) (*statepb.Response, error) {
+				return client.GetStock(ctx, req)
+			},
+		)
 	}
 
 	resp := &statepb.Response{
@@ -71,8 +69,8 @@ func (s *StockServer) GetStock(ctx context.Context, req *statepb.Request) (*stat
 
 type call func(ctx context.Context, client statepb.StateClient) (*statepb.Response, error)
 
-func (s *StockServer) forwardRequestToLeader(ctx context.Context, fn call) (*statepb.Response, error) {
-	clientConn, err := s.getDelegateClient()
+func (s *StockServer) forwardRequestToLeader(ctx context.Context, leadership *election.Leadership, fn call) (*statepb.Response, error) {
+	clientConn, err := s.getDelegateClient(leadership)
 	if err != nil {
 		logger.Error("failed to get delegate client", zap.Error(err))
 		return nil, err
@@ -82,8 +80,11 @@ func (s *StockServer) forwardRequestToLeader(ctx context.Context, fn call) (*sta
 	return fn(ctx, client)
 }
 
-func (s *StockServer) getDelegateClient() (*grpc.ClientConn, error) {
-	leaderID := s.leadership.GetLeaderID()
+func (s *StockServer) getDelegateClient(leadership *election.Leadership) (*grpc.ClientConn, error) {
+	if leadership == nil {
+		return nil, errors.New("failed to get leadership")
+	}
+	leaderID := leadership.GetLeaderID()
 	clientConn, ok := s.clientConns.Load(leaderID)
 	if ok {
 		return clientConn.(*grpc.ClientConn), nil

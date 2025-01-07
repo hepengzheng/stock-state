@@ -19,8 +19,6 @@ const defaultSessionTTL = 5 // seconds
 type Leadership struct {
 	client *clientv3.Client
 
-	purpose string
-
 	// leaderKey and leaderID will not change once initilized
 	leaderKey string
 	leaderID  string // we may use the container IP as leaderID
@@ -32,10 +30,9 @@ type Leadership struct {
 	currentLeaderID atomic.Value
 }
 
-func NewLeadership(client *clientv3.Client, purpose, leaderKey, leaderID string) *Leadership {
+func NewLeadership(client *clientv3.Client, leaderKey, leaderID string) *Leadership {
 	return &Leadership{
 		client:    client,
-		purpose:   purpose,
 		leaderKey: leaderKey,
 		leaderID:  leaderID,
 	}

@@ -65,7 +65,7 @@ func (s *State) Init(ctx context.Context) error {
 	return nil
 }
 
-func (s *State) Emit(ctx context.Context, leadership *election.Leadership, count int32) (int32, error) {
+func (s *State) GetStock(ctx context.Context, leadership *election.Leadership, count int32) (int32, error) {
 	const retryLimit = 10
 	for range retryLimit {
 		select {
@@ -84,7 +84,7 @@ func (s *State) Emit(ctx context.Context, leadership *election.Leadership, count
 			return 0, ErrNotLeader
 		}
 
-		res, err := s.emit(count)
+		res, err := s.getStock(count)
 		if err != nil {
 			if errors.Is(err, ErrCapReached) {
 				<-time.After(s.updateInterval)
@@ -139,7 +139,7 @@ func (s *State) close() error {
 	return nil
 }
 
-func (s *State) emit(count int32) (int32, error) {
+func (s *State) getStock(count int32) (int32, error) {
 	s.Lock()
 	defer s.Unlock()
 	value := s.value.Load()

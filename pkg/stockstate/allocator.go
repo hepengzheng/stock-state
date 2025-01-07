@@ -2,9 +2,14 @@ package stockstate
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"time"
 
+	clientv3 "go.etcd.io/etcd/client/v3"
+
 	"github.com/hepengzheng/stock-state/pkg/election"
+	"github.com/hepengzheng/stock-state/pkg/hostutil"
 	"github.com/hepengzheng/stock-state/pkg/logutil"
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
@@ -21,15 +26,22 @@ type Allocator struct {
 
 	leadership *election.Leadership
 	state      *State
+
+	clientConns sync.Map
 }
 
 func NewAllocator(ctx context.Context,
-	leadership *election.Leadership,
+	client *clientv3.Client,
 	storage storage.StockStorage,
 	prefix string,
 	config *AllocatorConfig,
 ) *Allocator {
-	m := Allocator{leadership: leadership}
+	m := Allocator{
+		leadership: election.NewLeadership(client,
+			fmt.Sprintf("/leader-%s", prefix),
+			hostutil.GetLocalAddr(),
+		),
+	}
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.state = &State{
 		storage:        storage,
@@ -55,8 +67,8 @@ func (at *Allocator) Close() {
 	_ = at.state.close()
 }
 
-func (at *Allocator) Emit(ctx context.Context, count int32) (int32, error) {
-	res, err := at.state.Emit(ctx, at.leadership, count)
+func (at *Allocator) GetStock(ctx context.Context, count int32) (int32, error) {
+	res, err := at.state.GetStock(ctx, at.leadership, count)
 	if err != nil {
 		return 0, err
 	}
@@ -80,4 +92,8 @@ func (at *Allocator) UpdateLoop() {
 			}
 		}
 	}
+}
+
+func (at *Allocator) IsLeader() bool {
+	return at.leadership.IsLeader()
 }
