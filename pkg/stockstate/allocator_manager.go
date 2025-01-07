@@ -2,13 +2,14 @@ package stockstate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"github.com/hepengzheng/stock-state/pkg/config"
 	"github.com/hepengzheng/stock-state/pkg/election"
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
@@ -20,9 +21,9 @@ type AllocatorManager struct {
 	keySpace sync.Map // key -> allocator
 	client   *clientv3.Client
 
-	leadership     *election.Leadership
-	storage        storage.StockStorage
-	updateInterval time.Duration
+	leadership      *election.Leadership
+	storage         storage.StockStorage
+	allocatorConfig *config.AllocatorConfig
 
 	clientConns sync.Map // server key -> client stream
 }
@@ -30,13 +31,13 @@ type AllocatorManager struct {
 func NewAllocatorManager(ctx context.Context,
 	client *clientv3.Client,
 	stockStorage storage.StockStorage,
-	updateInterval time.Duration,
+	cfg *config.Config,
 ) *AllocatorManager {
 	return &AllocatorManager{
-		ctx:            ctx,
-		client:         client,
-		storage:        stockStorage,
-		updateInterval: updateInterval,
+		ctx:             ctx,
+		client:          client,
+		storage:         stockStorage,
+		allocatorConfig: cfg.AllocatorConfig,
 	}
 }
 
@@ -63,10 +64,25 @@ func (am *AllocatorManager) getOrCreateAllocator(key string) *Allocator {
 		return at.(*Allocator)
 	}
 
-	allocator := NewAllocator(am.ctx, am.client, am.storage, key,
-		&AllocatorConfig{UpdateInterval: am.updateInterval})
+	allocator := NewAllocator(am.ctx, am.client, am.storage, key, am.allocatorConfig)
+	_ = allocator.Init()
 	am.keySpace.Store(key, allocator)
 	return allocator
+}
+
+func (am *AllocatorManager) Close() error {
+	var errs []error
+	am.keySpace.Range(func(key, value interface{}) bool {
+		allocator := value.(*Allocator)
+		if allocator != nil {
+			errs = append(errs, allocator.Close())
+		}
+		return true
+	})
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // TODO : add Delete and Reset

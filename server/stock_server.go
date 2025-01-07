@@ -67,6 +67,10 @@ func (s *StockServer) GetStock(ctx context.Context, req *statepb.Request) (*stat
 	return resp, nil
 }
 
+func (s *StockServer) Close() error {
+	return s.am.Close()
+}
+
 type call func(ctx context.Context, client statepb.StateClient) (*statepb.Response, error)
 
 func (s *StockServer) forwardRequestToLeader(ctx context.Context, leadership *election.Leadership, fn call) (*statepb.Response, error) {

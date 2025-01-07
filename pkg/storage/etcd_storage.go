@@ -27,12 +27,16 @@ func NewEtcdStockStorage(client *clientv3.Client) StockStorage {
 
 // Delete implements StockStorage.
 func (e *EtcdStockStorage) Delete(ctx context.Context, key string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	_, err := e.client.Delete(ctx, key)
 	return err
 }
 
 // Load implements StockStorage.
 func (e *EtcdStockStorage) Load(ctx context.Context, key string) (int32, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	resp, err := e.client.Get(ctx, key)
 	if err != nil {
 		return 0, err
@@ -45,6 +49,8 @@ func (e *EtcdStockStorage) Load(ctx context.Context, key string) (int32, error) 
 
 // Save implements StockStorage.
 func (e *EtcdStockStorage) Save(ctx context.Context, key string, value int32) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	encoded := encodeValue(value)
 	resp, err := e.client.Txn(ctx).If(clientv3.Compare(clientv3.Value(key), "<", encoded)).
 		Then(clientv3.OpPut(key, encoded)).

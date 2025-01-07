@@ -8,15 +8,12 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"github.com/hepengzheng/stock-state/pkg/config"
 	"github.com/hepengzheng/stock-state/pkg/election"
 	"github.com/hepengzheng/stock-state/pkg/hostutil"
 	"github.com/hepengzheng/stock-state/pkg/logutil"
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
-
-type AllocatorConfig struct {
-	UpdateInterval time.Duration
-}
 
 type Allocator struct {
 	ctx    context.Context
@@ -34,7 +31,7 @@ func NewAllocator(ctx context.Context,
 	client *clientv3.Client,
 	storage storage.StockStorage,
 	prefix string,
-	config *AllocatorConfig,
+	config *config.AllocatorConfig,
 ) *Allocator {
 	m := Allocator{
 		leadership: election.NewLeadership(client,
@@ -46,7 +43,7 @@ func NewAllocator(ctx context.Context,
 	m.state = &State{
 		storage:        storage,
 		prefix:         prefix,
-		updateInterval: config.UpdateInterval,
+		updateInterval: time.Duration(config.UpdateInterval) * time.Millisecond,
 		ctx:            m.ctx,
 	}
 	return &m
@@ -62,9 +59,10 @@ func (at *Allocator) Init() error {
 	return nil
 }
 
-func (at *Allocator) Close() {
+func (at *Allocator) Close() error {
 	at.cancel()
 	_ = at.state.close()
+	return nil
 }
 
 func (at *Allocator) GetStock(ctx context.Context, count int32) (int32, error) {
