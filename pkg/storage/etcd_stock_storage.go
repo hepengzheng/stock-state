@@ -48,12 +48,22 @@ func (e *EtcdStockStorage) Save(ctx context.Context, key string, value int32) er
 	encoded := encodeValue(value)
 	resp, err := e.client.Txn(ctx).If(clientv3.Compare(clientv3.Value(key), "<", encoded)).
 		Then(clientv3.OpPut(key, encoded)).
+		Else(clientv3.OpGet(key)).
 		Commit()
 	if err != nil {
 		return err
 	}
 	if !resp.Succeeded {
-		logger.Debug("failed to save value", zap.String("key", key), zap.String("value", encoded))
+		// the If statement returns false
+		var storedValue string
+		if len(resp.Responses) > 0 {
+			kvs := resp.Responses[0].GetResponseRange().Kvs
+			if len(kvs) > 0 {
+				storedValue = string(kvs[0].Value)
+			}
+		}
+		logger.Error("key may by updated concurrently", zap.String("key", key),
+			zap.String("stored_value", storedValue))
 	}
 	return nil
 }
