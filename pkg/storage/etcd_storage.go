@@ -62,7 +62,7 @@ func (e *EtcdStockStorage) Save(ctx context.Context, key string, value int32) er
 				storedValue = string(kvs[0].Value)
 			}
 		}
-		logger.Error("key may by updated concurrently", zap.String("key", key),
+		logger.Error("key may be updated concurrently", zap.String("key", key),
 			zap.String("stored_value", storedValue))
 	}
 	return nil
