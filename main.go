@@ -24,7 +24,7 @@ func NewEtcdClient(cfg *config.Config) (*clientv3.Client, error) {
 }
 
 func main() {
-	const port = ":9000"
+	const port = ":9000" // TODO(hpz): put it into config files
 
 	cfg := &config.Config{
 		AllocatorConfig: &config.AllocatorConfig{
