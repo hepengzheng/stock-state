@@ -51,8 +51,11 @@ func (s *State) Init(ctx context.Context) error {
 	capKey := s.getCapKey()
 	currentCapValue, err := s.storage.Load(ctx, capKey)
 	if err != nil {
-		return err
+		if !errors.Is(err, storage.ErrValueNotFound) {
+			return err
+		}
 	}
+	currentCapValue = 0
 	newCapValue := currentCapValue + defaultAllocCount
 	err = s.storage.Save(ctx, capKey, newCapValue)
 	if err != nil {
@@ -78,7 +81,7 @@ func (s *State) GetStock(ctx context.Context, leadership *election.Leadership, c
 
 		if !s.initialized.Load() {
 			if leadership.IsLeader() {
-				<-time.After(10 * time.Second)
+				<-time.After(10 * time.Millisecond)
 				continue
 			}
 			return 0, ErrNotLeader
@@ -152,5 +155,5 @@ func (s *State) getStock(count int32) (int32, error) {
 }
 
 func (s *State) getCapKey() string {
-	return fmt.Sprintf("%s:%s:%d", s.prefix, capValueKey, s.capValue.Load())
+	return fmt.Sprintf("%s:%s", s.prefix, capValueKey)
 }

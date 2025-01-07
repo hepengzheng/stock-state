@@ -20,8 +20,8 @@ func TestLeadership(t *testing.T) {
 	defer cli.Close()
 
 	const leaderKey = "/leader/"
-	ld1 := NewLeadership(cli, "stock-counter", leaderKey, "server1")
-	ld2 := NewLeadership(cli, "stock-counter", leaderKey, "server2")
+	ld1 := NewLeadership(cli, leaderKey, "server1")
+	ld2 := NewLeadership(cli, leaderKey, "server2")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go ld1.Start(ctx)

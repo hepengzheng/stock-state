@@ -8,13 +8,15 @@ import (
 	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
+	"go.uber.org/zap"
 
+	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/logutil"
 )
 
 var ProviderSet = wire.NewSet(NewLeadership)
 
-const defaultSessionTTL = 5 // seconds
+const defaultSessionTTL = 3 // seconds
 
 type Leadership struct {
 	client *clientv3.Client
@@ -75,7 +77,11 @@ func (ls *Leadership) Stop(ctx context.Context) {
 }
 
 func (ls *Leadership) GetLeaderID() string {
-	return ls.currentLeaderID.Load().(string)
+	leaderID := ls.currentLeaderID.Load()
+	if leaderID == nil {
+		return ""
+	}
+	return leaderID.(string)
 }
 
 func (ls *Leadership) IsLeader() bool {
@@ -86,7 +92,12 @@ func (ls *Leadership) IsLeader() bool {
 	if v == nil {
 		return false
 	}
-	return v.(string) == ls.leaderID
+	vs := v.(string)
+	if vs == ls.leaderID {
+		return true
+	}
+	logger.Info("current leader", zap.String("leaderID", vs))
+	return false
 }
 
 func (ls *Leadership) watchLeadership(ctx context.Context) {
@@ -97,9 +108,12 @@ func (ls *Leadership) watchLeadership(ctx context.Context) {
 			return
 		case resp, ok := <-observer:
 			if !ok {
+				logger.Info("leader election closed")
 				return
 			}
-			ls.currentLeaderID.Store(string(resp.Kvs[0].Value))
+			leaderID := string(resp.Kvs[0].Value)
+			logger.Info("observed leadership changes", zap.String("leader_id", leaderID))
+			ls.currentLeaderID.Store(leaderID)
 		}
 	}
 }

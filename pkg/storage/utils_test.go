@@ -10,10 +10,7 @@ import (
 func TestValueCodec(t *testing.T) {
 	tester := func(value int32) {
 		encoded := encodeValue(value)
-		decoded, err := decodeValue(encoded)
-		if err != nil {
-			t.Fatalf("error decoding value: %v", err)
-		}
+		decoded := decodeValue(encoded)
 		assert.Equal(t, value, decoded)
 	}
 

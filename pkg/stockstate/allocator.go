@@ -7,10 +7,12 @@ import (
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.uber.org/zap"
 
 	"github.com/hepengzheng/stock-state/pkg/config"
 	"github.com/hepengzheng/stock-state/pkg/election"
 	"github.com/hepengzheng/stock-state/pkg/hostutil"
+	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/logutil"
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
@@ -33,11 +35,19 @@ func NewAllocator(ctx context.Context,
 	prefix string,
 	config *config.AllocatorConfig,
 ) *Allocator {
+	leadership := election.NewLeadership(client,
+		fmt.Sprintf("/leader-%s", prefix),
+		hostutil.GetLocalAddr(),
+	)
+	go func() {
+		defer logutil.LogPanic()
+		err := leadership.Start(ctx)
+		if err != nil {
+			logger.Error("failed to start leader", zap.Error(err))
+		}
+	}()
 	m := Allocator{
-		leadership: election.NewLeadership(client,
-			fmt.Sprintf("/leader-%s", prefix),
-			hostutil.GetLocalAddr(),
-		),
+		leadership: leadership,
 	}
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.state = &State{
@@ -87,6 +97,7 @@ func (at *Allocator) UpdateLoop() {
 			return
 		case <-ticker.C:
 			if err := at.state.Update(); err != nil {
+				logger.Error("failed to update state", zap.Error(err))
 			}
 		}
 	}

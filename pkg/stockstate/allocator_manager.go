@@ -8,18 +8,26 @@ import (
 
 	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.uber.org/zap"
 
 	"github.com/hepengzheng/stock-state/pkg/config"
 	"github.com/hepengzheng/stock-state/pkg/election"
+	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
 
 var ProviderSet = wire.NewSet(NewAllocatorManager)
 
+type keyManager struct {
+	sync.Mutex
+	keySpace map[string]*Allocator
+}
+
 type AllocatorManager struct {
-	ctx      context.Context
-	keySpace sync.Map // key -> allocator
-	client   *clientv3.Client
+	ctx    context.Context
+	client *clientv3.Client
+
+	keyManager *keyManager
 
 	leadership      *election.Leadership
 	storage         storage.StockStorage
@@ -36,6 +44,7 @@ func NewAllocatorManager(ctx context.Context,
 	return &AllocatorManager{
 		ctx:             ctx,
 		client:          client,
+		keyManager:      &keyManager{keySpace: make(map[string]*Allocator)},
 		storage:         stockStorage,
 		allocatorConfig: cfg.AllocatorConfig,
 	}
@@ -59,26 +68,29 @@ func (am *AllocatorManager) GetLeadership(key string) *election.Leadership {
 }
 
 func (am *AllocatorManager) getOrCreateAllocator(key string) *Allocator {
-	at, ok := am.keySpace.Load(key)
+	am.keyManager.Lock()
+	defer am.keyManager.Unlock()
+	at, ok := am.keyManager.keySpace[key]
 	if ok {
-		return at.(*Allocator)
+		return at
 	}
 
 	allocator := NewAllocator(am.ctx, am.client, am.storage, key, am.allocatorConfig)
-	_ = allocator.Init()
-	am.keySpace.Store(key, allocator)
+	err := allocator.Init()
+	if err != nil {
+		logger.Error("failed to init allocator", zap.String("key", key), zap.Error(err))
+	}
+	am.keyManager.keySpace[key] = allocator
 	return allocator
 }
 
 func (am *AllocatorManager) Close() error {
 	var errs []error
-	am.keySpace.Range(func(key, value interface{}) bool {
-		allocator := value.(*Allocator)
-		if allocator != nil {
-			errs = append(errs, allocator.Close())
-		}
-		return true
-	})
+	am.keyManager.Lock()
+	defer am.keyManager.Unlock()
+	for _, at := range am.keyManager.keySpace {
+		errs = append(errs, at.Close())
+	}
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}

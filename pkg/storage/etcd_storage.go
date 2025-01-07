@@ -3,12 +3,10 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"go.uber.org/zap"
-
-	"github.com/hepengzheng/stock-state/pkg/logger"
 )
 
 var ProviderSet = wire.NewSet(NewEtcdStockStorage)
@@ -44,32 +42,45 @@ func (e *EtcdStockStorage) Load(ctx context.Context, key string) (int32, error) 
 	if len(resp.Kvs) == 0 {
 		return 0, ErrValueNotFound
 	}
-	return decodeValue(string(resp.Kvs[0].Value))
+	return decodeValue(string(resp.Kvs[0].Value)), nil
 }
 
 // Save implements StockStorage.
 func (e *EtcdStockStorage) Save(ctx context.Context, key string, value int32) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	encoded := encodeValue(value)
-	resp, err := e.client.Txn(ctx).If(clientv3.Compare(clientv3.Value(key), "<", encoded)).
-		Then(clientv3.OpPut(key, encoded)).
-		Else(clientv3.OpGet(key)).
-		Commit()
+
+	txn := e.client.Txn(ctx)
+
+	got, err := e.client.Get(ctx, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get key from etcd, key:%s, err:%w", key, err)
+	}
+	var currentValue string
+	switch kvLen := len(got.Kvs); {
+	case kvLen == 0:
+		txn.If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0))
+	case kvLen == 1:
+		currentValue = string(got.Kvs[0].Value)
+		txn.If(clientv3.Compare(clientv3.Value(key), "=", currentValue))
+	default:
+		return fmt.Errorf("incorrect kv len of key:%s", key)
+	}
+
+	if currentValue != "" {
+		cu := decodeValue(currentValue)
+		if cu >= value {
+			return fmt.Errorf("cannot save value less or equal to the preview one, key:%s", key)
+		}
+	}
+
+	resp, err := txn.Then(clientv3.OpPut(key, encodeValue(value))).Commit()
+	if err != nil {
+		return fmt.Errorf("failed to save key:%s, err:%w", key, err)
 	}
 	if !resp.Succeeded {
-		// the If statement returns false
-		var storedValue string
-		if len(resp.Responses) > 0 {
-			kvs := resp.Responses[0].GetResponseRange().Kvs
-			if len(kvs) > 0 {
-				storedValue = string(kvs[0].Value)
-			}
-		}
-		logger.Error("key may be updated concurrently", zap.String("key", key),
-			zap.String("stored_value", storedValue))
+		return fmt.Errorf("etcd update conflict, key:%s", key)
 	}
+
 	return nil
 }

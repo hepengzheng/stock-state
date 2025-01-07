@@ -24,5 +24,6 @@ func init() {
 }
 
 func GetLocalAddr() string {
-	return address
+	//return address
+	return "localhost:" + port
 }

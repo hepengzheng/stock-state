@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/google/wire"
 	"go.uber.org/zap"
@@ -34,14 +35,16 @@ func NewServer(ctx context.Context, am *stockstate.AllocatorManager) *StockServe
 }
 
 func (s *StockServer) GetStock(ctx context.Context, req *statepb.Request) (*statepb.Response, error) {
-	leadership := s.am.GetLeadership(req.Key)
-	if !leadership.IsLeader() {
-		return s.forwardRequestToLeader(ctx, leadership,
-			func(ctx context.Context, client statepb.StateClient) (*statepb.Response, error) {
-				return client.GetStock(ctx, req)
-			},
-		)
-	}
+
+	//leadership := s.am.GetLeadership(req.Key)
+	//if !leadership.IsLeader() {
+	//	logger.Info("try to forward request", zap.String("req", req.String()))
+	//	return s.forwardRequestToLeader(ctx, leadership,
+	//		func(ctx context.Context, client statepb.StateClient) (*statepb.Response, error) {
+	//			return client.GetStock(ctx, req)
+	//		},
+	//	)
+	//}
 
 	resp := &statepb.Response{
 		RequestId: req.RequestId,
@@ -88,7 +91,20 @@ func (s *StockServer) getDelegateClient(leadership *election.Leadership) (*grpc.
 	if leadership == nil {
 		return nil, errors.New("failed to get leadership")
 	}
-	leaderID := leadership.GetLeaderID()
+	var leaderID string
+	for range 3 {
+		leaderID = leadership.GetLeaderID()
+		if leaderID == "" {
+			<-time.After(time.Millisecond * 10)
+			continue
+		}
+	}
+
+	if leaderID == "" {
+		logger.Error("failed to get leadership", zap.String("leadership", leadership.GetLeaderID()))
+		return nil, errors.New("failed to get leadership")
+	}
+
 	clientConn, ok := s.clientConns.Load(leaderID)
 	if ok {
 		return clientConn.(*grpc.ClientConn), nil

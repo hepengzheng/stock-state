@@ -1,24 +1,19 @@
 package storage
 
 import (
-	"fmt"
 	"strconv"
 )
 
 func encodeValue(value int32) string {
-	return fmt.Sprintf("%010d", value)
+	//bs := make([]byte, 4)
+	//binary.LittleEndian.PutUint32(bs, uint32(value))
+	//return string(bs)
+
+	return strconv.FormatInt(int64(value), 10)
 }
 
-func decodeValue(s string) (int32, error) {
-	atoi, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, err
-	}
-
-	itoa := strconv.Itoa(atoi)
-	value, err := strconv.ParseInt(itoa, 10, 32)
-	if err != nil {
-		return 0, err
-	}
-	return int32(value), nil
+func decodeValue(s string) int32 {
+	//return int32(binary.LittleEndian.Uint32([]byte(s)))
+	result, _ := strconv.ParseInt(s, 0, 32)
+	return int32(result)
 }
