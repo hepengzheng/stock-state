@@ -3,7 +3,6 @@ module github.com/hepengzheng/stock-state
 go 1.23.4
 
 require (
-	github.com/google/wire v0.6.0
 	github.com/stretchr/testify v1.9.0
 	go.etcd.io/etcd/client/v3 v3.5.17
 	go.uber.org/zap v1.27.0

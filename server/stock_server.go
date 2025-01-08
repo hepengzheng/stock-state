@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/wire"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
@@ -16,8 +15,6 @@ import (
 	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/stockstate"
 )
-
-var ProviderSet = wire.NewSet(NewServer)
 
 type StockServer struct {
 	statepb.UnimplementedStateServer

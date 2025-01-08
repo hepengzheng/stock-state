@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
-
-var ProviderSet = wire.NewSet(NewEtcdStockStorage)
 
 var (
 	ErrValueNotFound = errors.New("value not found")
