@@ -87,8 +87,7 @@ func (s *State) GetStock(ctx context.Context, leadership *election.Leadership, c
 				<-time.After(10 * time.Millisecond)
 				continue
 			}
-			<-time.After(10 * time.Millisecond)
-			continue
+			return 0, ErrNotLeader
 		}
 
 		res, err := s.getStock(count)
