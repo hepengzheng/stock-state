@@ -10,5 +10,5 @@ will be elected and continues handling the client request from the cap stored in
 in spite of leaving some stocks not handed out. Typically, we must keep the handled number of stocks not exceeding
 the stock limit, but leaving some stocks not handled out is acceptable.
 
-This project demonstrates how to implement such a server, while many details remains to be optimized to 
+This project demonstrates how to implement such a server, while many details remain to be optimized to 
 make it production-ready.
