@@ -8,10 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/hepengzheng/stock-state/pkg/election"
-	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
 
@@ -100,7 +97,6 @@ func (s *State) GetStock(ctx context.Context, leadership *election.Leadership, c
 		}
 
 		if !leadership.IsLeader() {
-			logger.Info("server is not the leader after get the stock", zap.String("currentLeader", leadership.GetLeaderID()))
 			return 0, ErrNotLeader
 		}
 		return res, nil
