@@ -1,6 +1,6 @@
 # Stock State
 
-*Stock State* is a central stock manager for flash sale activities inspired by the Timestamp Oracle in Percolator
+*Stock State* is a centralized stock manager for flash sale activities inspired by the Timestamp Oracle in Percolator
 and TiDB's Placement Driver.
 
 It's essentially a server that hands out the remained stocks for the common flash sales on the Internet. Stock State
