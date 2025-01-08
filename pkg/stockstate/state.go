@@ -57,8 +57,8 @@ func (s *State) Init(ctx context.Context) error {
 		if !errors.Is(err, storage.ErrValueNotFound) {
 			return err
 		}
+		currentCapValue = 0
 	}
-	currentCapValue = 0
 	newCapValue := currentCapValue + defaultAllocCount
 	err = s.storage.Save(ctx, capKey, newCapValue)
 	if err != nil {
