@@ -29,4 +29,6 @@ cd example
 go run main.go
 ```
 
+Logs will be written to the `server.log` file, which will be created automatically if it does not exist.
+
 Note that currently the data stored in etcd will not be auto-cleanup, users may manually delete it before a new run.
