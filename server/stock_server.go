@@ -12,6 +12,7 @@ import (
 
 	statepb "github.com/hepengzheng/stock-state/api/statebp"
 	"github.com/hepengzheng/stock-state/pkg/election"
+	"github.com/hepengzheng/stock-state/pkg/jsonutil"
 	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/stockstate"
 )
@@ -35,16 +36,15 @@ func NewServer(ctx context.Context, am *stockstate.AllocatorManager) *StockServe
 }
 
 func (s *StockServer) GetStock(ctx context.Context, req *statepb.Request) (*statepb.Response, error) {
-
-	//leadership := s.am.GetLeadership(req.Key)
-	//if !leadership.IsLeader() {
-	//	logger.Info("try to forward request", zap.String("req", req.String()))
-	//	return s.forwardRequestToLeader(ctx, leadership,
-	//		func(ctx context.Context, client statepb.StateClient) (*statepb.Response, error) {
-	//			return client.GetStock(ctx, req)
-	//		},
-	//	)
-	//}
+	leadership := s.am.GetLeadership(req.Key)
+	if !leadership.IsLeader() {
+		logger.Info("try to forward request", zap.String("req", req.String()))
+		return s.forwardRequestToLeader(ctx, leadership,
+			func(ctx context.Context, client statepb.StateClient) (*statepb.Response, error) {
+				return client.GetStock(ctx, req)
+			},
+		)
+	}
 
 	resp := &statepb.Response{
 		RequestId: req.RequestId,
@@ -67,6 +67,8 @@ func (s *StockServer) GetStock(ctx context.Context, req *statepb.Request) (*stat
 		resp.Result = stock
 	}
 
+	logger.Info("get stock finished", zap.Any("resp", jsonutil.MustMarshal(resp)),
+		zap.Int32("stock", resp.Result))
 	return resp, nil
 }
 

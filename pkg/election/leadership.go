@@ -2,10 +2,8 @@ package election
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 
-	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"go.uber.org/zap"
@@ -13,8 +11,6 @@ import (
 	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/logutil"
 )
-
-var ProviderSet = wire.NewSet(NewLeadership)
 
 const defaultSessionTTL = 3 // seconds
 
@@ -48,22 +44,35 @@ func (ls *Leadership) Start(ctx context.Context) error {
 	}
 	ls.session = sess
 	ls.election = concurrency.NewElection(sess, ls.leaderKey)
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("leadership exits because %v", ctx.Err())
-		default:
-			// the following line will block until the current server becomes the leader
-			err = ls.election.Campaign(ctx, ls.leaderID)
-			if err != nil {
-				return err
-			}
-			ls.currentLeaderID.Store(ls.leaderID)
-
-			// this line will block until the ctx is canceled or the watched key is deleted by etcd
-			ls.watchLeadership(ctx)
+	leaderResp, _ := ls.election.Leader(ctx)
+	if leaderResp != nil && len(leaderResp.Kvs) > 0 {
+		if cl := string(leaderResp.Kvs[0].Value); cl != "" {
+			logger.Info("starting leadership", zap.String("current_leader", cl))
+			ls.currentLeaderID.Store(cl)
 		}
 	}
+	go func() {
+		defer logutil.LogPanic()
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("stopping leadership", zap.String("leader_key", ls.leaderKey))
+				return
+			default:
+				// the following line will block until the current server becomes the leader
+				err = ls.election.Campaign(ctx, ls.leaderID)
+				if err != nil {
+					logger.Error("election campaign failed", zap.Error(err))
+					return
+				}
+				ls.currentLeaderID.Store(ls.leaderID)
+
+				// this line will block until the ctx is canceled or the watched key is deleted by etcd
+				ls.watchLeadership(ctx)
+			}
+		}
+	}()
+	return nil
 }
 
 func (ls *Leadership) Stop(ctx context.Context) {

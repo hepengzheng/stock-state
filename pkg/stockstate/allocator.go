@@ -2,16 +2,13 @@ package stockstate
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 
 	"github.com/hepengzheng/stock-state/pkg/config"
 	"github.com/hepengzheng/stock-state/pkg/election"
-	"github.com/hepengzheng/stock-state/pkg/hostutil"
 	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/logutil"
 	"github.com/hepengzheng/stock-state/pkg/storage"
@@ -30,25 +27,12 @@ type Allocator struct {
 }
 
 func NewAllocator(ctx context.Context,
-	client *clientv3.Client,
 	storage storage.StockStorage,
 	prefix string,
 	config *config.AllocatorConfig,
+	leadership *election.Leadership,
 ) *Allocator {
-	leadership := election.NewLeadership(client,
-		fmt.Sprintf("/leader-%s", prefix),
-		hostutil.GetLocalAddr(),
-	)
-	go func() {
-		defer logutil.LogPanic()
-		err := leadership.Start(ctx)
-		if err != nil {
-			logger.Error("failed to start leader", zap.Error(err))
-		}
-	}()
-	m := Allocator{
-		leadership: leadership,
-	}
+	m := Allocator{leadership: leadership}
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.state = &State{
 		storage:        storage,

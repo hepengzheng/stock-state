@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -26,26 +27,27 @@ func main() {
 
 	start := time.Now()
 	var (
-		sent     int32 = 0
-		wg       sync.WaitGroup
-		respChan = make(chan int32)
+		requestID atomic.Int32
+		sent      atomic.Int32
+		wg        sync.WaitGroup
+		respChan  = make(chan int32)
 	)
-
 	go func() {
 		defer logutil.LogPanic()
 		defer close(respChan)
-		for range 8000 {
-			wg.Add(1)
-			if sent%200 == 0 {
-				<-time.After(10 * time.Millisecond)
+		const numRequest = 6000
+		wg.Add(numRequest)
+		for range numRequest {
+			if sent.Load()%100 == 0 {
+				<-time.After(21 * time.Millisecond)
 			}
-			sent++
+			sent.Add(1)
 			go func() {
 				defer logutil.LogPanic()
 				defer wg.Done()
 				now := time.Now().UnixMicro()
 				req := &statepb.Request{
-					RequestId: strconv.FormatInt(now, 10),
+					RequestId: strconv.FormatInt(int64(requestID.Add(1)), 10),
 					Timestamp: now,
 					Key:       "benchmark-key",
 					Count:     1,
@@ -54,6 +56,9 @@ func main() {
 				if err != nil {
 					logger.Error("Failed to send request", zap.Error(err))
 				} else {
+					logger.Info("Sent request",
+						zap.String("requestId", resp.RequestId),
+						zap.Int32("result", resp.Result))
 					respChan <- resp.Result
 				}
 			}()
@@ -68,7 +73,7 @@ func main() {
 		}
 	}
 
-	logger.Info("finished", zap.Int32("res", res), zap.Int32("sent", sent),
+	logger.Info("finished", zap.Int32("res", res), zap.Int32("sent", sent.Load()),
 		zap.Int64("elapsed ms", time.Since(start).Milliseconds()))
 }
 

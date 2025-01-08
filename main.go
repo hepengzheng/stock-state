@@ -7,17 +7,19 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	statepb "github.com/hepengzheng/stock-state/api/statebp"
 	"github.com/hepengzheng/stock-state/pkg/config"
+	"github.com/hepengzheng/stock-state/pkg/election"
+	"github.com/hepengzheng/stock-state/pkg/hostutil"
 	"github.com/hepengzheng/stock-state/pkg/logger"
+	"github.com/hepengzheng/stock-state/pkg/stockstate"
+	"github.com/hepengzheng/stock-state/pkg/storage"
+	"github.com/hepengzheng/stock-state/server"
 )
-
-var providerSet = wire.NewSet(NewEtcdClient)
 
 func NewEtcdClient(cfg *config.Config) (*clientv3.Client, error) {
 	return clientv3.New(*cfg.EtcdConfig)
@@ -33,13 +35,20 @@ func main() {
 		EtcdConfig: &clientv3.Config{Endpoints: []string{"localhost:2379"}},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	stockServer, err := initApp(ctx, cfg)
+	client, err := NewEtcdClient(cfg)
 	if err != nil {
-		cancel()
-		logger.Fatal("init app err", zap.Error(err))
+		logger.Fatal("failed to create etcd client", zap.Error(err))
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	leadership := election.NewLeadership(client, "leader", hostutil.GetLocalAddr())
+	err = leadership.Start(ctx)
+	if err != nil {
+		logger.Error("failed to start leader", zap.Error(err))
+	}
+	stockStorage := storage.NewEtcdStockStorage(client)
+	allocatorManager := stockstate.NewAllocatorManager(ctx, client, stockStorage, cfg, leadership)
+	stockServer := server.NewServer(ctx, allocatorManager)
 	listener, err := net.Listen("tcp", port)
 	if err != nil {
 		logger.Fatal("failed to listen", zap.Error(err))

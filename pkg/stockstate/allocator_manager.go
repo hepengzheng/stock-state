@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/google/wire"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 
@@ -15,8 +14,6 @@ import (
 	"github.com/hepengzheng/stock-state/pkg/logger"
 	"github.com/hepengzheng/stock-state/pkg/storage"
 )
-
-var ProviderSet = wire.NewSet(NewAllocatorManager)
 
 type keyManager struct {
 	sync.Mutex
@@ -40,6 +37,7 @@ func NewAllocatorManager(ctx context.Context,
 	client *clientv3.Client,
 	stockStorage storage.StockStorage,
 	cfg *config.Config,
+	leadership *election.Leadership,
 ) *AllocatorManager {
 	return &AllocatorManager{
 		ctx:             ctx,
@@ -47,6 +45,7 @@ func NewAllocatorManager(ctx context.Context,
 		keyManager:      &keyManager{keySpace: make(map[string]*Allocator)},
 		storage:         stockStorage,
 		allocatorConfig: cfg.AllocatorConfig,
+		leadership:      leadership,
 	}
 }
 
@@ -75,7 +74,7 @@ func (am *AllocatorManager) getOrCreateAllocator(key string) *Allocator {
 		return at
 	}
 
-	allocator := NewAllocator(am.ctx, am.client, am.storage, key, am.allocatorConfig)
+	allocator := NewAllocator(am.ctx, am.storage, key, am.allocatorConfig, am.leadership)
 	err := allocator.Init()
 	if err != nil {
 		logger.Error("failed to init allocator", zap.String("key", key), zap.Error(err))
